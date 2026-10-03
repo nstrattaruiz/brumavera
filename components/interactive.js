@@ -113,6 +113,8 @@ export function createWisp(container, o) {
 /** Muestra un susurro breve (secretos, frases del bosque). */
 let whisperEl = null, whisperTimer = null;
 export function whisper(text, mark = '') {
+  // Durante el pago, el bosque guarda silencio
+  if (document.documentElement.classList.contains('is-shop')) return;
   if (!whisperEl) {
     whisperEl = h('div', { class: 'whisper', role: 'status', 'aria-live': 'polite' });
     document.body.append(whisperEl);

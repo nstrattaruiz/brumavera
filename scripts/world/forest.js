@@ -129,6 +129,20 @@ function buildDoor(place) {
       <path d="M700 760L725 760M875 760L900 760M700 830L725 830M875 830L900 830M712 660L732 676M888 660L868 676M770 618L778 640M830 618L822 640"/>
     </g>
     <path class="door__inner" d="M725 885L725 720A75 75 0 0 1 875 720L875 885Z" fill="url(#door-in)"/>
+    <clipPath id="door-clip"><path d="M725 885L725 720A75 75 0 0 1 875 720L875 885Z"/></clipPath>
+    <g clip-path="url(#door-clip)" class="door__portal" pointer-events="none">
+      <g class="door__swirl" fill="none" stroke="#fff3d1">
+        <circle cx="800" cy="772" r="18" stroke-width="2" stroke-dasharray="5 7" opacity=".5"/>
+        <circle cx="800" cy="772" r="38" stroke-width="1.6" stroke-dasharray="14 10" opacity=".35"/>
+        <circle cx="800" cy="772" r="62" stroke-width="1.4" stroke-dasharray="26 14" opacity=".28"/>
+        <circle cx="800" cy="772" r="90" stroke-width="1.2" stroke-dasharray="40 22" opacity=".2"/>
+        <circle cx="800" cy="772" r="124" stroke-width="1" stroke-dasharray="60 30" opacity=".14"/>
+      </g>
+      <g class="door__swirl door__swirl--b" fill="none" stroke="#9fd3b5">
+        <circle cx="800" cy="772" r="28" stroke-width="1" stroke-dasharray="3 12" opacity=".4"/>
+        <circle cx="800" cy="772" r="74" stroke-width="1" stroke-dasharray="8 18" opacity=".25"/>
+      </g>
+    </g>
     <g class="door__leaf door__leaf--l">
       <path d="M725 885L725 720A75 75 0 0 1 800 645L800 885Z" fill="url(#door-wood)"/>
       <g stroke="#1a140c" stroke-width="1.4"><path d="M750 662L750 885M775 650L775 885"/></g>
@@ -229,11 +243,11 @@ function buildNear(side, k = 1) {
 
 /* ---------- Ensamblado ---------- */
 
-export function createForest({ content, particles, audio, secrets }) {
+export function createForest({ content, particles, audio, secrets, onPortal }) {
   const place = content.places.find((p) => p.type === 'forest') || content.places[0];
   const peekerCreature = content.creatures.find((c) => c.id === place.peeker) || content.creatures.find((c) => c.form === 'spirit') || content.creatures[0];
 
-  const section = h('section', { class: 'place place--forest', id: place.id, 'data-place': place.id, 'aria-label': place.name });
+  const section = h('section', { class: 'view place place--forest', id: place.id, 'data-place': place.id, 'aria-label': place.name });
   const stage = h('div', { class: 'forest' });
   section.append(stage);
 
@@ -328,17 +342,24 @@ export function createForest({ content, particles, audio, secrets }) {
     }
   }
 
-  // Click en la puerta: avanza hasta cruzarla
-  let trigger = null;
-  const doorHit = doorSvg.querySelector('.door__inner');
+  // La puerta es un portal: al tocarla se abre y te lleva adentro
+  let trigger = null, crossed = false;
   doorSvg.querySelectorAll('.door__leaf, .door__inner').forEach((el) => {
     el.setAttribute('data-cursor', 'link');
     el.setAttribute('data-cursor-label', place.doorInscription || '');
   });
-  doorSvg.addEventListener('click', (e) => {
-    if (!e.target.closest('.door__leaf, .door__inner') || !trigger) return;
+  function cross(from) {
+    if (crossed) return;
+    crossed = true;
+    doorSvg.classList.add('is-opening');
     audio.play('wood', 0.2);
-    window.__lenis ? window.__lenis.scrollTo(trigger.end + 2, { duration: 3.2 }) : scrollTo({ top: trigger.end + 2, behavior: 'smooth' });
+    setTimeout(() => onPortal?.(from || viewPoint(DOOR.x, DOOR.y)), 380);
+  }
+  doorSvg.addEventListener('click', (e) => {
+    if (!e.target.closest('.door__leaf, .door__inner')) return;
+    const b = stage.getBoundingClientRect();
+    const p = viewPoint(DOOR.x, DOOR.y);
+    cross({ x: b.left + p.x, y: b.top + p.y });
   });
 
   /* Recorrido por scroll: nos acercamos, la puerta se abre y entramos. */
@@ -366,7 +387,8 @@ export function createForest({ content, particles, audio, secrets }) {
           const rush = p > 0.7 && p < 0.97 ? Math.sin(((p - 0.7) / 0.27) * Math.PI) : 0;
           particles.rush(env.reduced ? 0 : rush * 0.75);
           particles.light(clamp((p - 0.55) * 3));
-          document.documentElement.classList.toggle('is-interior', p > 0.94);
+          // Al final del recorrido se cruza el portal
+          if (p > 0.97) cross({ x: innerWidth / 2, y: innerHeight / 2 });
         },
         onLeave() { particles.rush(0); },
       },
@@ -395,5 +417,11 @@ export function createForest({ content, particles, audio, secrets }) {
     return tl;
   }
 
-  return { el: section, buildTimeline, get trigger() { return trigger; } };
+  function enter() {
+    crossed = false;
+    doorSvg.classList.remove('is-opening');
+    buildTimeline();
+  }
+
+  return { el: section, enter, label: () => place.name };
 }

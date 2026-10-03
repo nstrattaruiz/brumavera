@@ -1,7 +1,7 @@
-/* Estado persistente del visitante: colección adoptada, secretos y preferencias.
+/* Estado persistente del visitante: cesta, pedidos, colección, secretos y preferencias.
    Todo envuelto en try/catch: la experiencia funciona aunque no haya almacenamiento. */
 
-const KEY = 'bosque-state-v1';
+const KEY = 'bosque-state-v2';
 const listeners = new Set();
 
 function load() {
@@ -12,7 +12,7 @@ function load() {
   }
 }
 
-const state = Object.assign({ collection: [], secrets: [], sound: false }, load());
+const state = Object.assign({ cart: [], orders: [], collection: [], secrets: [], sound: false }, load());
 
 function save() {
   try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { /* sin almacenamiento */ }
@@ -23,10 +23,39 @@ export const store = {
   get state() { return state; },
   subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); },
 
-  isAdopted: (id) => state.collection.includes(id),
-  adopt(id) { if (!state.collection.includes(id)) { state.collection.push(id); save(); } },
-  release(id) { state.collection = state.collection.filter((c) => c !== id); save(); },
+  /* ---- Cesta ---- */
+  get cartCount() { return state.cart.reduce((n, i) => n + i.qty, 0); },
+  inCart: (id) => state.cart.find((i) => i.id === id)?.qty || 0,
+  /** Unidades ya adoptadas en pedidos anteriores (para calcular disponibilidad). */
+  purchased: (id) => state.orders.reduce((n, o) => n + o.items.filter((i) => i.id === id).reduce((a, i) => a + i.qty, 0), 0),
 
+  addToCart(id, qty = 1, max = Infinity) {
+    const line = state.cart.find((i) => i.id === id);
+    if (line) line.qty = Math.min(max, line.qty + qty);
+    else state.cart.push({ id, qty: Math.min(max, qty) });
+    save();
+  },
+  setQty(id, qty, max = Infinity) {
+    const line = state.cart.find((i) => i.id === id);
+    if (!line) return;
+    if (qty <= 0) state.cart = state.cart.filter((i) => i.id !== id);
+    else line.qty = Math.min(max, qty);
+    save();
+  },
+  removeFromCart(id) { state.cart = state.cart.filter((i) => i.id !== id); save(); },
+  clearCart() { state.cart = []; save(); },
+
+  /* ---- Pedidos y colección ---- */
+  placeOrder(order) {
+    state.orders.unshift(order);
+    order.items.forEach((i) => { if (!state.collection.includes(i.id)) state.collection.push(i.id); });
+    state.cart = [];
+    save();
+  },
+  getOrder: (id) => state.orders.find((o) => o.id === id),
+  isAdopted: (id) => state.collection.includes(id),
+
+  /* ---- Secretos ---- */
   hasSecret: (id) => state.secrets.includes(id),
   /** Devuelve true sólo la primera vez que se encuentra el secreto. */
   findSecret(id) {

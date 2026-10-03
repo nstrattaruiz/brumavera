@@ -44,7 +44,7 @@ export function createSideRoots(side = 'l', seed = 1, count = 5) {
  */
 export function createLoreSection(place, content, { secrets, audio, particles }) {
   const { world, lore } = content;
-  const el = h('section', { class: 'place place--lore', id: place.id, 'data-place': place.id, 'aria-label': place.name });
+  const el = h('section', { class: 'view place place--lore', id: place.id, 'data-place': place.id, 'aria-label': place.name, hidden: true });
   el.append(createSideRoots('l', 3, 6), createSideRoots('r', 8, 6));
   el.append(createPlaceHeader(place));
 

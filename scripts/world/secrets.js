@@ -39,6 +39,7 @@ export function createSecrets({ content, audio }) {
     clearTimeout(idleTimer);
     clearTimeout(whisperTimer);
     if (document.documentElement.classList.contains('is-intro')) return;
+    if (/checkout|pedido/.test(location.hash)) return;
     whisperTimer = setTimeout(() => {
       const now = Date.now();
       if (now - lastWhisper > 45000 && content.whispers?.length) {

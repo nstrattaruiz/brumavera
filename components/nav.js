@@ -5,7 +5,7 @@ import { h, esc, svgRoot, env, wait, s, fmt } from '../scripts/core/utils.js';
 import { createBranch, growBranches } from './branch.js';
 import { store } from '../scripts/core/store.js';
 
-export function createNav({ content, audio, particles, goTo }) {
+export function createNav({ content, audio, particles, goTo, onCart }) {
   const ui = content.ui;
   const places = content.places;
 
@@ -17,7 +17,24 @@ export function createNav({ content, audio, particles, goTo }) {
     h('i', { class: 'nav__sigil', html: '<svg viewBox="0 0 24 24"><path d="M12 2v20M5 7l14 10M19 7L5 17"/><circle cx="12" cy="12" r="3"/></svg>' }),
   ]);
   const where = h('div', { class: 'nav__where', 'aria-live': 'polite' });
-  const bar = h('nav', { class: 'nav', 'aria-label': ui.map }, [brand, h('div', { class: 'nav__right' }, [sound, mapBtn]), where]);
+  const cartBtn = h('button', { class: 'nav__cart', type: 'button', 'data-cursor': 'link', 'aria-label': ui.cart });
+  cartBtn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h16l-1.6 10.2a1.5 1.5 0 0 1-1.5 1.3H7.1a1.5 1.5 0 0 1-1.5-1.3Z"/><path d="M8.5 9 11 3.5M15.5 9 13 3.5"/><path d="M9 13v4M12 13v4M15 13v4"/></svg><span>${esc(ui.cart)}</span><b class="nav__count">0</b>`;
+  cartBtn.addEventListener('click', () => onCart?.());
+  const syncCount = () => {
+    const n = store.cartCount;
+    const b = cartBtn.querySelector('.nav__count');
+    if (String(n) !== b.textContent && n > Number(b.textContent)) {
+      cartBtn.classList.remove('is-bump');
+      void cartBtn.offsetWidth;
+      cartBtn.classList.add('is-bump');
+    }
+    b.textContent = n;
+    cartBtn.classList.toggle('has-items', n > 0);
+    cartBtn.setAttribute('aria-label', `${ui.cart} (${n})`);
+  };
+  store.subscribe(syncCount);
+  syncCount();
+  const bar = h('nav', { class: 'nav', 'aria-label': ui.map }, [brand, h('div', { class: 'nav__right' }, [sound, mapBtn, cartBtn]), where]);
   document.body.append(bar);
 
   const syncSound = () => {
@@ -89,24 +106,35 @@ export function createNav({ content, audio, particles, goTo }) {
   });
   document.body.append(passage);
 
-  async function travel(id) {
+  function travel(id) {
     closeMap();
-    audio.play('whoosh', 0.16);
-    passage.classList.add('is-closing');
-    particles.rush(0.5);
-    await wait(env.reduced ? 50 : 750);
     goTo(id);
-    await wait(120);
-    particles.rush(0);
-    passage.classList.remove('is-closing');
   }
 
-  function setPlace(id) {
+  /* Cortina de ramas usada por el cambio de vista */
+  const curtain = {
+    async close() {
+      audio.play('whoosh', 0.16);
+      passage.classList.add('is-closing');
+      particles.rush(0.5);
+      await wait(env.reduced ? 50 : 750);
+    },
+    async open() {
+      await wait(80);
+      particles.rush(0);
+      passage.classList.remove('is-closing');
+      await wait(env.reduced ? 50 : 700);
+    },
+  };
+
+  /** Indica dónde está el visitante. label sirve para vistas que no son lugares (ficha, checkout). */
+  function setPlace(id, label = '') {
     const p = places.find((x) => x.id === id);
-    if (!p) return;
-    where.innerHTML = `<span>${esc(p.numeral || '')}</span><b>${esc(p.name)}</b>`;
+    where.innerHTML = p
+      ? `<span>${esc(p.numeral || '')}</span><b>${esc(p.name)}</b>`
+      : `<span>✦</span><b>${esc(label)}</b>`;
     list.querySelectorAll('button').forEach((b) => (b.dataset.id === id ? b.setAttribute('aria-current', 'location') : b.removeAttribute('aria-current')));
   }
 
-  return { setPlace, travel, show: () => bar.classList.add('is-on'), syncSound };
+  return { setPlace, travel, curtain, show: () => bar.classList.add('is-on'), syncSound };
 }

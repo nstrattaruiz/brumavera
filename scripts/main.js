@@ -1,16 +1,23 @@
-/* Punto de entrada: arma el mundo a partir del contenido y conecta los sistemas. */
+/* Punto de entrada: arma el mundo a partir del contenido y conecta los sistemas.
+   Cada lugar es una vista: sólo una está visible, y cambiar de lugar la reemplaza. */
 
 import content from '../data/content.js';
 import { env, pointer, h, $, $$ } from './core/utils.js';
 import { store } from './core/store.js';
 import { audio } from './core/audio.js';
+import { createRouter } from './core/router.js';
+import { createCommerce } from './core/commerce.js';
 import { createParticleSystem } from './core/particles.js';
 import { createCursor } from './core/cursor.js';
 import { startWatching } from '../components/creature.js';
-import { createDiscovery } from '../components/discovery.js';
+import { createProductView } from '../components/discovery.js';
+import { createCart } from '../components/cart.js';
+import { createPortal } from '../components/portal.js';
 import { createNav } from '../components/nav.js';
+import { growBranches } from '../components/branch.js';
 import { createForest } from './world/forest.js';
-import { createPlaces, createFooter, TONES } from './world/places.js';
+import { createPlaces, TONES } from './world/places.js';
+import { createCheckoutView, createOrderView } from './world/checkout.js';
 import { createIntro } from './world/intro.js';
 import { createCanopy } from './world/canopy.js';
 import { createSecrets } from './world/secrets.js';
@@ -53,88 +60,113 @@ if (window.Lenis && !env.reduced) {
   lenis.stop();
 }
 
+const commerce = createCommerce(content);
 const secrets = createSecrets({ content, audio });
 const canopy = createCanopy({ audio });
-const discovery = createDiscovery({ content, particles, audio, lenis });
-const deps = { content, particles, audio, secrets, onOpen: (c) => discovery.open(c) };
+const portal = createPortal({ particles, audio });
+const router = createRouter((route) => show(route));
+const go = (path, opts) => router.go(path, opts);
+const cart = createCart({ content, audio, commerce, go });
+const deps = { content, particles, audio, secrets, commerce, go, onOpen: (c) => go(`criatura/${c.id}`) };
 
-/* ---- El mundo ---- */
+/* ---- Vistas ---- */
 const world = $('#world');
-const forest = createForest({ content, particles, audio, secrets });
-world.append(forest.el);
-const places = createPlaces(content, deps);
-places.forEach((p) => world.append(p));
-world.append(createFooter(content, () => nav.travel(content.places[0].id)));
+const views = new Map();
+const firstPlace = content.places[0].id;
 
-function goTo(id) {
-  const el = document.getElementById(id);
-  if (!el) return;
-  const top = id === content.places[0].id ? 0 : el;
-  if (lenis) lenis.scrollTo(top, { immediate: true, force: true });
-  else if (top === 0) scrollTo(0, 0);
-  else el.scrollIntoView();
-  canopy.regrow();
+const forest = createForest({
+  content, particles, audio, secrets,
+  onPortal: (from) => go(content.places[1]?.id || firstPlace, { portal: from }),
+});
+views.set(firstPlace, { el: forest.el, enter: forest.enter, tone: TONES.forest, forest: true });
+
+createPlaces(content, deps).forEach((el) => views.set(el.id, { el, enter: el.enter, tone: el.dataset.tone }));
+
+const productView = createProductView({ ...deps, cart });
+views.set('criatura', { ...productView, tone: TONES.shelf });
+const checkoutView = createCheckoutView({ ...deps, cart });
+views.set('checkout', { ...checkoutView, tone: TONES.letter });
+const orderView = createOrderView(deps);
+views.set('pedido', { ...orderView, tone: TONES.letter });
+
+views.forEach((v) => world.append(v.el));
+
+const nav = createNav({ content, audio, particles, goTo: go, onCart: () => cart.toggle() });
+
+/* ---- Cambio de vista ---- */
+let current = null, ctx = null, busy = false, queued = null;
+
+function scrollTop() {
+  if (lenis) lenis.scrollTo(0, { immediate: true, force: true });
+  scrollTo(0, 0);
 }
 
-const nav = createNav({ content, audio, particles, goTo });
-
-/* ---- Lugar actual, tono de luz ---- */
-let currentPlace = null;
-function enterPlace(id, tone) {
-  if (id === currentPlace) return;
-  currentPlace = id;
-  nav.setPlace(id);
-  html.style.setProperty('--tone', tone);
-  if (id !== content.places[0].id) canopy.regrow(0.8);
-}
-enterPlace(content.places[0].id, TONES.forest);
-
-/* ---- Coreografía de scroll ---- */
-function setupScroll() {
-  if (!hasGsap) {
-    const io = new IntersectionObserver((entries) => entries.forEach((e) => e.isIntersecting && enterPlace(e.target.id, e.target.dataset.tone || TONES.forest)), { threshold: 0.4 });
-    [forest.el, ...places].forEach((p) => io.observe(p));
-    return;
-  }
-  const ft = forest.buildTimeline();
-  places.forEach((p) => p.setupScroll?.());
-
-  // Texto que aparece palabra por palabra
-  $$('[data-words]').forEach((p) => gsap.fromTo(p.querySelectorAll('.w'), { opacity: 0.12 }, {
+/** Animaciones comunes de cada lugar: texto palabra por palabra, raíces que crecen. */
+function enterCommon(el) {
+  if (!hasGsap) return;
+  $$('[data-words]', el).forEach((p) => gsap.fromTo(p.querySelectorAll('.w'), { opacity: 0.12 }, {
     opacity: 1, stagger: 0.04, ease: 'none',
     scrollTrigger: { trigger: p, start: 'top 88%', end: 'bottom 60%', scrub: true },
   }));
-
-  // Raíces que bajan por los costados y raíces que separan lugares
-  $$('.side-roots').forEach((svg) => gsap.fromTo(svg.querySelectorAll('.branch'), { '--p': 0 }, {
+  $$('.side-roots', el).forEach((svg) => gsap.fromTo(svg.querySelectorAll('.branch'), { '--p': 0 }, {
     '--p': 1, stagger: 0.25, ease: 'none',
-    scrollTrigger: { trigger: svg.parentElement, start: 'top 75%', end: 'bottom 70%', scrub: true },
+    scrollTrigger: { trigger: el, start: 'top top', end: 'bottom bottom', scrub: true },
   }));
-  $$('.place__divider').forEach((svg) => gsap.fromTo(svg.querySelectorAll('.branch'), { '--p': 0 }, {
-    '--p': 1, stagger: 0.1, ease: 'none',
-    scrollTrigger: { trigger: svg, start: 'top bottom', end: 'top 30%', scrub: true },
-  }));
-
-  // Lugar activo
-  ScrollTrigger.create({
-    trigger: forest.el, start: 'top top', end: () => (ft ? ft.scrollTrigger.end : innerHeight),
-    onToggle: (self) => self.isActive && enterPlace(content.places[0].id, TONES.forest),
-  });
-  places.forEach((p) => ScrollTrigger.create({
-    trigger: p, start: 'top 55%', end: 'bottom 55%',
-    onToggle: (self) => self.isActive && enterPlace(p.id, p.dataset.tone),
-  }));
+  $$('.place__divider', el).forEach((svg) => growBranches(svg, { duration: env.reduced ? 0.01 : 2.4, stagger: 0.15 }));
 }
-setupScroll();
+
+async function show(route) {
+  if (busy) { queued = route; return; }
+  let id = route.view || firstPlace;
+  if (!views.has(id)) id = firstPlace;
+  const view = views.get(id);
+  const opts = router.pendingOpts || {};
+  router.pendingOpts = {};
+  busy = true;
+  cart.close();
+
+  // Transición: portal si se cruza la puerta, ramas en cualquier otro caso
+  const transition = opts.portal ? { close: () => portal.close(opts.portal), open: () => portal.open() } : nav.curtain;
+  const hadView = !!current;
+  if (hadView) await transition.close();
+
+  if (current) {
+    ctx?.revert();
+    current.leave?.();
+    current.el.hidden = true;
+  }
+  view.el.hidden = false;
+  current = view;
+  scrollTop();
+  html.classList.toggle('is-interior', !view.forest);
+  html.classList.toggle('is-shop', id === 'checkout' || id === 'pedido');
+  html.style.setProperty('--tone', view.tone || TONES.lore);
+  particles.light(view.forest ? 0 : 0.6);
+  nav.setPlace(id, view.label?.() || '');
+
+  if (hasGsap) {
+    ctx = gsap.context(() => {
+      enterCommon(view.el);
+      view.enter?.(route.params);
+    });
+    ScrollTrigger.refresh();
+  } else {
+    view.enter?.(route.params);
+  }
+  nav.setPlace(id, view.label?.() || '');
+  if (view !== views.get(firstPlace)) canopy.regrow(0.7);
+  document.title = id === firstPlace ? content.meta.title : `${view.label?.() || content.places.find((p) => p.id === id)?.name || ''} — ${content.world.name}`;
+
+  if (hadView) await transition.open();
+  busy = false;
+  if (queued) { const q = queued; queued = null; show(q); }
+}
 
 /* ---- Revelados y pausa fuera de pantalla ---- */
 const revealIO = new IntersectionObserver((entries) => entries.forEach((e) => {
   if (e.isIntersecting) { e.target.classList.add('is-in'); revealIO.unobserve(e.target); }
 }), { threshold: 0.2 });
 $$('[data-reveal]').forEach((el) => revealIO.observe(el));
-
-const pauseIO = new IntersectionObserver((entries) => entries.forEach((e) => e.target.classList.toggle('is-offscreen', !e.isIntersecting)), { rootMargin: '120px' });
-places.forEach((p) => pauseIO.observe(p));
 
 /* ---- Viento: el scroll mueve las ramas del dosel ---- */
 lenis?.on('scroll', ({ velocity }) => canopy.gust(velocity));
@@ -167,18 +199,13 @@ createIntro({
     canopy.show();
     nav.show();
     nav.syncSound();
-    if (hasGsap) {
-      gsap.to('.forest', { opacity: 1, scale: 1, duration: 3, ease: 'power2.out', clearProps: 'scale' });
-      ScrollTrigger.refresh();
-    }
+    router.start();
+    if (hasGsap) gsap.to('.forest', { opacity: 1, scale: 1, duration: 3, ease: 'power2.out', clearProps: 'scale' });
     document.dispatchEvent(new Event('world:entered'));
-    const hash = decodeURIComponent(location.hash.slice(1));
-    if (hash && document.getElementById(hash)) setTimeout(() => nav.travel(hash), 1800);
   },
 });
 
 document.fonts?.ready.then(() => hasGsap && ScrollTrigger.refresh());
-addEventListener('load', () => hasGsap && ScrollTrigger.refresh());
 
 // Sólo para depurar desde la consola
-window.__world = { content, store, secrets };
+window.__world = { content, store, secrets, go };

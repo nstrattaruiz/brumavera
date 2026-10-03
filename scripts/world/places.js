@@ -18,7 +18,7 @@ export const TONES = {
 const visibleCreatures = (content, secrets) => content.creatures.filter((c) => !c.hidden || secrets.unlocked);
 
 function section(place, extra = '') {
-  return h('section', { class: `place place--${place.type} ${extra}`, id: place.id, 'data-place': place.id, 'aria-label': place.name });
+  return h('section', { class: `view place place--${place.type} ${extra}`, id: place.id, 'data-place': place.id, 'aria-label': place.name, hidden: true });
 }
 
 /* ---------- EL REFUGIO: estantería que se recorre en horizontal ---------- */
@@ -77,20 +77,18 @@ function createShelf(place, content, deps) {
   track.append(end);
   el.append(viewport);
 
-  el.setupScroll = () => {
+  // Se ejecuta dentro del contexto de la vista: al salir, el pin se deshace solo.
+  el.enter = () => {
     if (!window.gsap || !window.ScrollTrigger || env.touch || env.mobile) return;
-    const mm = gsap.matchMedia();
-    mm.add('(min-width: 761px) and (hover: hover)', () => {
-      const dist = () => track.scrollWidth - innerWidth;
-      const branches = roots.querySelectorAll('.branch');
-      gsap.to(track, {
-        x: () => -dist(), ease: 'none',
-        scrollTrigger: {
-          trigger: el, start: 'top top', end: () => `+=${dist()}`, pin: true, scrub: 1, invalidateOnRefresh: true,
-          onUpdate: (self) => branches.forEach((b, i) => b.style.setProperty('--p', Math.min(1, self.progress * 1.6 - i * 0.3 + 0.3))),
-        },
-      });
-      branches.forEach((b) => b.style.setProperty('--p', 0.3));
+    const dist = () => track.scrollWidth - innerWidth;
+    const branches = roots.querySelectorAll('.branch');
+    branches.forEach((b) => b.style.setProperty('--p', 0.3));
+    gsap.to(track, {
+      x: () => -dist(), ease: 'none',
+      scrollTrigger: {
+        trigger: el, start: 'top top', end: () => `+=${dist()}`, pin: true, scrub: 1, invalidateOnRefresh: true,
+        onUpdate: (self) => branches.forEach((b, i) => b.style.setProperty('--p', Math.min(1, self.progress * 1.6 - i * 0.3 + 0.3))),
+      },
     });
   };
   return el;
@@ -162,7 +160,7 @@ function createMarket(place, content, deps) {
   let rt;
   addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(drawRoots, 200); });
   new IntersectionObserver(([e]) => { if (e.isIntersecting) { drawRoots(); table.classList.add('is-rooted'); } }, { threshold: 0.15 }).observe(table);
-  el.addEventListener('load', drawRoots, true);
+  el.enter = () => requestAnimationFrame(() => { drawRoots(); setTimeout(drawRoots, 600); });
 
   el.append(tags, table);
   return el;
@@ -198,9 +196,7 @@ function createCabinet(place, content, deps) {
         art.setAttribute('data-cursor', 'creature');
         art.addEventListener('click', () => deps.onOpen(c));
         watchCursor(art.querySelector('.creature'));
-        const rel = h('button', { class: 'drawer__release', type: 'button', 'data-cursor': 'link', text: ui.release });
-        rel.addEventListener('click', () => { deps.audio.play('rustle', 0.1); store.release(c.id); });
-        tray.append(art, rel);
+        tray.append(art);
         tray.style.setProperty('--glow', c.glow);
       } else {
         tray.append(h('span', { class: 'drawer__dust' }));
@@ -221,7 +217,20 @@ function createCabinet(place, content, deps) {
     const sec = deps.secrets;
     findings.innerHTML = `<span class="cabinet__count">${esc(ui.findings)} · ${sec.count} / ${sec.total}</span>
       <ul>${sec.items.map((it) => `<li class="${sec.has(it.id) ? 'is-found' : ''}" title="${sec.has(it.id) ? esc(it.message) : ''}">${sec.has(it.id) ? esc(it.mark) : '·'}</li>`).join('')}</ul>`;
+
+    // Pedidos realizados
+    const orders = store.state.orders;
+    ordersBox.hidden = !orders.length;
+    ordersBox.innerHTML = orders.length ? `<h3>${esc(ui.orders)}</h3><ul>${orders.map((o) => `
+      <li><button type="button" data-order="${esc(o.id)}" data-cursor="link">
+        <span>${esc(o.id)}</span>
+        <span>${esc(new Date(o.date).toLocaleDateString(content.meta.locale))}</span>
+        <span>${o.items.reduce((n, i) => n + i.qty, 0)} ×</span>
+        <strong>${esc(deps.commerce.money(o.total))}</strong></button></li>`).join('')}</ul>` : '';
+    ordersBox.querySelectorAll('[data-order]').forEach((b) => b.addEventListener('click', () => deps.go(`pedido/${b.dataset.order}`)));
   }
+  const ordersBox = h('div', { class: 'cabinet__orders' });
+  el.append(ordersBox);
   render();
   store.subscribe(render);
   return el;
@@ -344,17 +353,28 @@ const BUILDERS = {
   letter: createLetter,
 };
 
+/** Al final de cada lugar, un camino hacia el siguiente. */
+function createNextLink(next, content, go) {
+  const b = h('button', { class: 'next-place', type: 'button', 'data-cursor': 'link' });
+  b.innerHTML = `<span class="next-place__label">${esc(content.ui.nextPlace)}</span>
+    <span class="next-place__num">${esc(next.numeral || '')}</span>
+    <span class="next-place__name">${esc(next.name)}</span><i></i>`;
+  b.addEventListener('click', () => go(next.id));
+  return b;
+}
+
 export function createPlaces(content, deps) {
-  return content.places
-    .filter((p) => p.type !== 'forest' && BUILDERS[p.type])
-    .map((p, i) => {
-      const el = BUILDERS[p.type](p, content, deps);
-      el.dataset.tone = TONES[p.type] || TONES.lore;
-      if (i > 0) {
-        const divider = createRoots({ seed: 100 + i * 7, count: 3, grown: false });
-        divider.classList.add('place__divider');
-        el.prepend(divider);
-      }
-      return el;
-    });
+  const list = content.places.filter((p) => p.type !== 'forest' && BUILDERS[p.type]);
+  return list.map((p, i) => {
+    const el = BUILDERS[p.type](p, content, deps);
+    el.dataset.tone = TONES[p.type] || TONES.lore;
+    const divider = createRoots({ seed: 100 + i * 7, count: 3, grown: false });
+    divider.classList.add('place__divider');
+    el.prepend(divider);
+    const next = list[i + 1];
+    const host = el.querySelector('.shelf__end') || el;
+    if (next) host.append(createNextLink(next, content, deps.go));
+    else el.append(createFooter(content, () => deps.go(content.places[0].id)));
+    return el;
+  });
 }

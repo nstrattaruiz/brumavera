@@ -119,9 +119,9 @@ export function formatPrice(price, content) {
 /**
  * Crea un objeto/producto interactivo.
  * @param {object} creature  datos del contenido
- * @param {object} deps      { content, particles, audio, onOpen, variant }
+ * @param {object} deps      { content, particles, audio, onOpen, variant, commerce }
  */
-export function createProduct(creature, { content, particles, audio, onOpen, variant = 'shelf' }) {
+export function createProduct(creature, { content, particles, audio, onOpen, commerce, variant = 'shelf' }) {
   const el = h('article', {
     class: `object object--${variant}`,
     tabindex: 0,
@@ -137,16 +137,28 @@ export function createProduct(creature, { content, particles, audio, onOpen, var
     <div class="object__tag">
       <span class="object__num">${esc(creature.number)}</span>
       <span class="object__name">${esc(creature.name)}</span>
-      ${variant === 'table' ? `<span class="object__price">${esc(formatPrice(creature.price, content))}</span>` : ''}
+      <span class="object__price">${esc(formatPrice(creature.price, content))}</span>
+      <span class="object__state"></span>
     </div>
     <span class="object__mark" aria-hidden="true"></span>`;
 
   const creatureEl = el.querySelector('.creature');
   watchCursor(creatureEl);
 
-  const syncAdopted = () => el.classList.toggle('is-adopted', store.isAdopted(creature.id));
-  syncAdopted();
-  store.subscribe(syncAdopted);
+  // Estado comercial: en la cesta, agotada
+  const stateEl = el.querySelector('.object__state');
+  const sync = () => {
+    const soldOut = commerce ? commerce.available(creature) === 0 : false;
+    const inCart = store.inCart(creature.id);
+    el.classList.toggle('is-adopted', store.isAdopted(creature.id));
+    el.classList.toggle('is-soldout', soldOut);
+    el.classList.toggle('is-incart', inCart > 0);
+    stateEl.textContent = soldOut ? content.ui.soldOut : inCart ? `${content.ui.inCart} · ${inCart}` : '';
+  };
+  sync();
+  const unsubscribe = store.subscribe(sync);
+  let disposed = false;
+  el._dispose = () => { disposed = true; unsubscribe(); clearInterval(dustTimer); };
 
   let dustTimer;
   const near = () => {
@@ -170,6 +182,7 @@ export function createProduct(creature, { content, particles, audio, onOpen, var
 
   // De vez en cuando, la criatura abre los ojos sola: "¿había algo ahí?"
   const peek = () => {
+    if (disposed) return;
     if (!document.hidden && !el.classList.contains('is-near')) {
       el.classList.add('is-peeking');
       setTimeout(() => el.classList.remove('is-peeking'), 1600 + Math.random() * 1400);
