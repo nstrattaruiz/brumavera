@@ -1,0 +1,285 @@
+/* ==========================================================================
+   MUNDO — intro y bosque
+   ========================================================================== */
+
+/* ---------- Intro ---------- */
+
+.intro { position: fixed; inset: 0; z-index: 23; overflow: hidden; }
+.intro__dark { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 56%, #0e140e 0%, #060806 55%, #030403 100%); }
+.intro__curtain {
+  position: absolute;
+  top: -6%;
+  height: 112%;
+  width: 64vw;
+  opacity: 0;
+  transition: opacity 4s ease;
+  will-change: transform;
+}
+.intro__curtain svg { width: 100%; height: 100%; overflow: visible; }
+.intro__curtain--l { left: -8vw; transform-origin: 0% 50%; }
+.intro__curtain--r { right: -8vw; transform-origin: 100% 50%; }
+.intro.is-ready .intro__curtain--d0 { opacity: .55; }
+.intro.is-ready .intro__curtain--d1 { opacity: 1; }
+.intro__glow {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 55%, rgba(212, 197, 154, .22), rgba(128, 107, 66, .08) 30%, transparent 62%);
+  opacity: 0;
+  pointer-events: none;
+}
+.intro__content {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 0 16px;
+  text-align: center;
+  pointer-events: none;
+}
+.intro__content > * { pointer-events: auto; }
+.intro__phrase {
+  margin: 0;
+  font-family: var(--serif);
+  font-weight: 300;
+  font-size: clamp(1.25rem, 3.4vw, 2.6rem);
+  letter-spacing: .34em;
+  text-transform: uppercase;
+  color: var(--c-8);
+  text-shadow: 0 0 30px rgba(0, 0, 0, .9);
+}
+.intro__word { display: inline-block; white-space: nowrap; }
+.intro__word span {
+  display: inline-block;
+  opacity: 0;
+  filter: blur(6px);
+  transform: translateY(6px);
+  transition: opacity 1.6s ease, filter 1.8s ease, transform 2s var(--ease-organic);
+  transition-delay: calc(1.6s + var(--i) * 85ms);
+}
+.intro.is-ready .intro__word span { opacity: 1; filter: blur(0); transform: none; }
+.intro__enter {
+  position: relative;
+  margin-top: clamp(40px, 8vh, 72px);
+  padding: 14px 6px;
+  font: 500 11px/1 var(--sans);
+  letter-spacing: .6em;
+  text-indent: .6em;
+  text-transform: uppercase;
+  color: var(--c-7);
+  opacity: 0;
+  transition: opacity 2s ease 4.6s, color .5s, letter-spacing 1s var(--ease-organic);
+}
+.intro.is-ready .intro__enter { opacity: 1; }
+.intro__enter i {
+  position: absolute;
+  left: 50%; bottom: 0;
+  width: 26px; height: 1px;
+  margin-left: -13px;
+  background: currentColor;
+  transition: width 1s var(--ease-organic), margin 1s var(--ease-organic);
+}
+.intro__enter:hover { color: var(--c-9); letter-spacing: .72em; }
+.intro__enter:hover i { width: 100%; margin-left: -50%; }
+.intro__sound {
+  position: absolute;
+  bottom: max(28px, env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  flex-direction: column;
+  gap: 8px;
+  opacity: 0;
+  transition: opacity 2s ease 5.4s, color .4s;
+}
+.intro__sound > i { margin-bottom: 2px; }
+.intro__sound span { display: none; }
+.intro__sound em { font: italic 13px/1 var(--fell); letter-spacing: .08em; text-transform: none; color: var(--c-5); }
+.intro__sound[aria-pressed="true"] { color: var(--c-8); }
+.intro.is-ready .intro__sound { opacity: 1; }
+.intro.is-leaving .intro__sound { opacity: 0; transition: opacity .4s; }
+.intro.is-gone { opacity: 0; transition: opacity .8s; }
+
+/* ---------- Bosque ---------- */
+
+.place--forest { position: relative; height: 100vh; height: 100svh; z-index: 1; }
+.forest { position: absolute; inset: 0; overflow: hidden; background: #070907; }
+.forest__sky { position: absolute; inset: 0; background: radial-gradient(ellipse 80% 70% at 54% 26%, #1b251a 0%, #0f160f 42%, #070907 100%); }
+.forest__layer { position: absolute; inset: 0; will-change: transform; pointer-events: none; }
+.forest__px { position: absolute; inset: 0; }
+.forest__px svg { width: 100%; height: 100%; overflow: visible; }
+.forest__layer .leaf, .forest__layer .shroom, .forest__layer .bush, .forest__layer .sigil,
+.forest__layer .door__leaf, .forest__layer .door__inner { pointer-events: visiblePainted; }
+.forest__layer--near .leaf { pointer-events: none; }
+
+.fog { position: absolute; inset: -20% -40%; pointer-events: none; will-change: transform; }
+.fog--back {
+  background:
+    radial-gradient(ellipse 30% 16% at 30% 72%, rgba(170, 185, 160, .08), transparent 70%),
+    radial-gradient(ellipse 34% 18% at 72% 68%, rgba(170, 185, 160, .07), transparent 70%),
+    radial-gradient(ellipse 50% 14% at 50% 82%, rgba(170, 185, 160, .06), transparent 70%);
+  animation: drift 46s ease-in-out infinite alternate;
+}
+.fog--front {
+  background:
+    radial-gradient(ellipse 40% 20% at 22% 88%, rgba(180, 190, 168, .13), transparent 70%),
+    radial-gradient(ellipse 36% 18% at 80% 84%, rgba(180, 190, 168, .1), transparent 70%),
+    radial-gradient(ellipse 70% 30% at 50% 100%, rgba(150, 165, 140, .12), transparent 70%);
+  opacity: .3;
+  animation: drift 34s ease-in-out infinite alternate-reverse;
+}
+@keyframes drift { from { transform: translateX(-4%); } to { transform: translateX(4%); } }
+
+.forest__shafts { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.forest__shafts i {
+  position: absolute;
+  top: -20%;
+  width: 11vw;
+  height: 130%;
+  background: linear-gradient(180deg, rgba(212, 197, 154, .07), rgba(212, 197, 154, .02) 55%, transparent 80%);
+  transform: rotate(16deg);
+  transform-origin: top center;
+  animation: shaft 13s ease-in-out infinite alternate;
+}
+.forest__shafts i:nth-child(1) { left: 38%; }
+.forest__shafts i:nth-child(2) { left: 52%; width: 6vw; animation-delay: -5s; }
+.forest__shafts i:nth-child(3) { left: 63%; width: 9vw; animation-delay: -9s; opacity: .7; }
+@keyframes shaft { from { opacity: .35; } to { opacity: 1; } }
+
+.forest__shadow {
+  position: absolute;
+  top: 25%;
+  left: 0;
+  width: 26vw;
+  height: 60vh;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, .55), transparent);
+  pointer-events: none;
+  opacity: 0;
+  animation: pass 41s linear 9s infinite;
+}
+@keyframes pass {
+  0% { transform: translateX(-40vw); opacity: 0; }
+  6% { opacity: 1; }
+  22% { transform: translateX(120vw); opacity: 0; }
+  100% { transform: translateX(120vw); opacity: 0; }
+}
+
+.forest__title {
+  position: absolute;
+  top: clamp(90px, 16vh, 170px);
+  left: 0; right: 0;
+  text-align: center;
+  padding: 0 16px;
+  pointer-events: none;
+}
+.forest__title h1 {
+  margin: .25em 0 .2em;
+  font-weight: 300;
+  font-size: clamp(2.6rem, 7.6vw, 6.6rem);
+  letter-spacing: .16em;
+  text-indent: .16em;
+  text-transform: uppercase;
+  color: var(--c-8);
+  text-shadow: 0 0 40px rgba(0, 0, 0, .8);
+  line-height: 1;
+}
+.forest__title p { margin: 0; font-family: var(--fell); font-style: italic; color: var(--c-6); font-size: clamp(1rem, 2vw, 1.25rem); }
+.forest__hint {
+  position: absolute;
+  left: 50%;
+  bottom: max(14px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  font: 500 10px/1 var(--sans);
+  letter-spacing: .4em;
+  text-transform: uppercase;
+  color: var(--c-6);
+  pointer-events: none;
+}
+.forest__hint i { display: block; width: 1px; height: 30px; background: linear-gradient(var(--c-6), transparent); transform-origin: top; animation: hint 2.8s ease-in-out infinite; }
+@keyframes hint { 0% { transform: scaleY(0); } 50% { transform: scaleY(1); } 100% { transform: scaleY(1); opacity: 0; } }
+
+.forest__flood {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at var(--ox, 50%) var(--oy, 62%), rgba(240, 217, 154, .9) 0%, rgba(179, 138, 74, .55) 16%, rgba(58, 42, 20, .92) 52%, #16120b 100%);
+}
+.forest__interior { position: absolute; inset: 0; opacity: 0; pointer-events: none; background: #16120b; }
+
+/* Puerta */
+.door__inscription { font-family: var(--fell); font-style: italic; font-size: 22px; letter-spacing: .24em; fill: var(--c-7); opacity: 0; }
+.door__keyhole { animation: pulse 3.6s ease-in-out infinite; }
+.door__seam, .door__under { animation: pulse 5s ease-in-out infinite; }
+.door__lantern-glow { animation: flicker 3.2s infinite; transform-box: fill-box; transform-origin: center; }
+.door__leaf { transition: filter .6s; }
+.door-svg:hover .door__leaf { filter: brightness(1.25); }
+@keyframes pulse { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
+@keyframes flicker {
+  0%, 100% { opacity: .85; transform: scale(1); }
+  20% { opacity: .7; transform: scale(.96); }
+  42% { opacity: 1; transform: scale(1.04); }
+  64% { opacity: .78; }
+  80% { opacity: .95; transform: scale(1.01); }
+}
+
+/* Símbolo tallado, hongos, arbusto */
+.sigil path { stroke: #121811; transition: stroke 1.2s, filter 1.2s; }
+.sigil:hover path { stroke: #2e3c2a; }
+.sigil.is-lit path { stroke: var(--glow-green); filter: drop-shadow(0 0 5px rgba(156, 199, 154, .8)); }
+.shroom__halo { animation: breathe-glow 6s ease-in-out infinite alternate; transition: opacity .6s; }
+.shroom:nth-of-type(2n) .shroom__halo { animation-delay: -3s; }
+.shroom:hover .shroom__halo { opacity: 1.6; animation-duration: 1.4s; }
+.shroom__cap { transition: opacity .6s; }
+.shroom:hover .shroom__cap { opacity: 1; }
+@keyframes breathe-glow { from { opacity: .45; } to { opacity: 1; } }
+
+.peeker { transform: translateY(80px); transition: transform 1.3s cubic-bezier(.6, 0, .2, 1); }
+.peeker.is-up { transform: translateY(0); transition-duration: 1s; }
+.peeker .c-eye, .peeker .c-glow { transform: none !important; opacity: 1; }
+.bush__eyes { opacity: 0; animation: glimmer 13s ease-in-out 6s infinite; }
+@keyframes glimmer {
+  0%, 74% { opacity: 0; }
+  76% { opacity: 1; }
+  79% { opacity: .1; }
+  81%, 86% { opacity: 1; }
+  90%, 100% { opacity: 0; }
+}
+
+/* Luz que huye */
+.wisp { position: absolute; left: 0; top: 0; width: 0; height: 0; z-index: 6; transition: opacity 1.2s; will-change: transform; }
+.wisp i {
+  position: absolute;
+  width: 8px; height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 50%;
+  background: #fff3d1;
+  box-shadow: 0 0 10px 3px var(--wisp), 0 0 38px 12px rgba(227, 196, 126, .22);
+  animation: wisp 2.2s ease-in-out infinite alternate;
+}
+.wisp::before { content: ''; position: absolute; width: 70px; height: 70px; margin: -35px 0 0 -35px; border-radius: 50%; }
+.wisp.is-tired i { animation-duration: .9s; opacity: .7; }
+.wisp.is-caught i { box-shadow: 0 0 18px 6px var(--wisp), 0 0 60px 20px rgba(227, 196, 126, .3); }
+.wisp.is-gone, html.is-interior .wisp { opacity: 0; pointer-events: none; }
+@keyframes wisp { from { transform: scale(.85); opacity: .75; } to { transform: scale(1.1); opacity: 1; } }
+
+.no-gsap .forest { opacity: 1 !important; }
+
+@media (max-width: 760px) {
+  .intro__curtain { width: 80vw; }
+  .intro__curtain--l { left: -22vw; }
+  .intro__curtain--r { right: -22vw; }
+  .forest__title { top: clamp(84px, 14vh, 140px); }
+  .forest__title h1 { letter-spacing: .1em; text-indent: .1em; }
+  .forest__shafts i { width: 22vw; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .whisper.is-on { animation: none; opacity: 1; transform: translateX(-50%); }
+  .intro__word span { filter: none; }
+}
